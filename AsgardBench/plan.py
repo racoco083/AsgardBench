@@ -208,7 +208,7 @@ class Plan:
                     continue
 
             if os.path.isfile(full_file_name):
-                shutil.copy(full_file_name, new_dir)
+                shutil.copyfile(full_file_name, os.path.join(new_dir, os.path.basename(full_file_name)))
 
         # Create a copy of the plan
         fail_plan = copy.deepcopy(self)

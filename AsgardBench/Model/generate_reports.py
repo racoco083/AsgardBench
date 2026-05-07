@@ -89,14 +89,25 @@ class ResultsPrinter:
                 continue
             tests.add(test_name)
             try:
-                for model_dir in os.listdir(test_path):
-                    model_path = os.path.join(test_path, model_dir)
-                    if not os.path.isdir(model_path):
+                for entry in os.listdir(test_path):
+                    entry_path = os.path.join(test_path, entry)
+                    if not os.path.isdir(entry_path):
                         continue
-                    # Only include directories that have a config.json
-                    config_file = os.path.join(model_path, "config.json")
-                    if os.path.exists(config_file):
-                        model_dirs.add(model_dir)
+                    # Direct match: {test}/{model_dir}/config.json
+                    if os.path.exists(os.path.join(entry_path, "config.json")):
+                        model_dirs.add(entry)
+                    else:
+                        # One level deeper: {test}/{prefix}/{model_dir}/config.json
+                        # Handles model IDs with slashes like "qwen/qwen3.5-9b"
+                        try:
+                            for sub_entry in os.listdir(entry_path):
+                                sub_path = os.path.join(entry_path, sub_entry)
+                                if os.path.isdir(sub_path) and os.path.exists(
+                                    os.path.join(sub_path, "config.json")
+                                ):
+                                    model_dirs.add(f"{entry}/{sub_entry}")
+                        except PermissionError:
+                            continue
             except PermissionError:
                 continue
 

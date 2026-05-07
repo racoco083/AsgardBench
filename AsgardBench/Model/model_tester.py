@@ -799,12 +799,12 @@ class ModelTester:
                     and previous_image_filename
                     and os.path.exists(previous_image_filename)
                 ):
-                    shutil.copy(
+                    shutil.copyfile(
                         previous_image_filename,
                         f"{sample_prompt_dir}/previous_image.png",
                     )
                 if image_filename and os.path.exists(image_filename):
-                    shutil.copy(
+                    shutil.copyfile(
                         image_filename, f"{sample_prompt_dir}/current_image.png"
                     )
 
@@ -985,7 +985,7 @@ class ModelTester:
                         )  # L=grayscale, back to RGB for consistency
                         gray_img.save(previous_image_filename)
                     else:
-                        shutil.copy(image_filename, previous_image_filename)
+                        shutil.copyfile(image_filename, previous_image_filename)
             else:
                 previous_image_filename = None
 
