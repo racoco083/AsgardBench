@@ -1,72 +1,190 @@
 # AsgardBench
 
-A benchmark for evaluating Vision-Language Models (VLMs) on embodied household tasks.
+A benchmark for evaluating **Vision-Language Models (VLMs)** on embodied household tasks in a 3D simulated environment.
 
-📄 **Paper:** [AsgardBench - Evaluating Visually Grounded Interactive Planning Under Minimal Feedback](https://arxiv.org/abs/2603.15888)
+📄 **Paper:** [AsgardBench — Evaluating Visually Grounded Interactive Planning Under Minimal Feedback](https://arxiv.org/abs/2603.15888)
 
-## Overview
+---
 
-AsgardBench evaluates how well VLMs can act as embodied agents completing multi-step household tasks. Given a task description (e.g., "Make coffee") and egocentric visual observations, the model must output actions to accomplish the goal.
+## What is AsgardBench?
 
-**Key features:**
-- 🏠 108 task instances across 12 task types and 3 scene types in AI2-THOR
-- 👁️ Egocentric visual observations
-- 🎯 Automatic success evaluation via goal checking
-- 🔧 Works with any OpenAI-compatible API endpoint
+AsgardBench tests how well a VLM can act as an autonomous agent inside a 3D home environment ([AI2-THOR](https://ai2thor.allenai.org/)). At each step, the model receives:
 
-For detailed methodology, ablation studies, and results, please see our paper.
+- A **task description** (e.g., "Make coffee in the mug")
+- An **egocentric image** (first-person view of the current scene)
+- A list of **available objects** in the room
+- A **history** of previous actions and their outcomes
 
-## Quick Start
+The model must choose the next action (e.g., `PICKUP Mug`, `TOGGLE_ON CoffeeMachine`) until the task is complete or the step limit is reached.
+
+**Key facts:**
+- 🏠 **108 task instances** across 12 task types (Make coffee, Cook egg, Set table, Clean mirror, …)
+- 👁️ Egocentric RGB images at 1024×1024
+- 🎯 Automatic success evaluation — no human annotation needed
+- 🔌 Works with any **OpenAI-compatible API** (OpenAI, OpenRouter, Azure, vLLM, …)
+
+---
+
+## Supported Actions
+
+| Action | Description |
+|--------|-------------|
+| `FIND <object>` | Navigate to and face the object |
+| `PICKUP <object>` | Pick up the object |
+| `PUT <object>` | Place the held object |
+| `OPEN <object>` | Open a container (fridge, cabinet, …) |
+| `CLOSE <object>` | Close a container |
+| `TOGGLE_ON <object>` | Switch on an appliance |
+| `TOGGLE_OFF <object>` | Switch off an appliance |
+| `CLEAN <object>` | Clean the object (with a cloth/spray) |
+| `SLICE <object>` | Slice the object |
+| `DRINK <object>` | Drink from the object |
+| `EMPTY <object>` | Empty the contents |
+| `SPRAY <object>` | Spray the object |
+
+---
+
+## Installation
 
 ### Prerequisites
 
-- [uv](https://docs.astral.sh/uv/)
-- An OpenAI-compatible API endpoint (OpenAI, Azure OpenAI, OpenRouter, vLLM, etc.)
-- **Linux:** X11 display or Xvfb (for AI2-THOR rendering)
+| Requirement | Notes |
+|-------------|-------|
+| **Linux or WSL2** | AI2-THOR only runs on Linux/macOS. Windows users: see [Windows Setup](#windows-setup-wsl2) |
+| **Python 3.10+** | Managed automatically by `uv` |
+| **uv** | Fast Python package manager |
+| **API key** | Any OpenAI-compatible endpoint (OpenAI, OpenRouter, Azure, …) |
+| **xvfb** | Required for headless Linux rendering (no GPU needed) |
 
-### Installation
+### Install uv
 
 ```bash
-# Clone the repository
-git clone https://github.com/microsoft/AsgardBench.git
-cd AsgardBench
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc   # or restart the terminal
+```
 
-# Install dependencies
+### Clone and Install
+
+```bash
+git clone https://github.com/racoco083/AsgardBench.git
+cd AsgardBench
 uv sync
 ```
 
-### Configuration
+### Install xvfb (headless display — no GPU required)
 
-Create a `.env` file with your API credentials:
+```bash
+sudo apt-get install -y xvfb
+```
+
+---
+
+## Windows Setup (WSL2)
+
+AI2-THOR requires Linux. On Windows, use WSL2 (Windows Subsystem for Linux).
+
+### Step 1 — Install WSL2 + Ubuntu
+
+Open **PowerShell as Administrator** and run:
+
+```powershell
+wsl --install
+```
+
+Restart your PC, then complete the Ubuntu username/password setup.
+
+### Step 2 — Install dependencies in Ubuntu
+
+```bash
+sudo apt-get update
+sudo apt-get install -y xvfb libgl1-mesa-dri libglib2.0-0
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
+```
+
+### Step 3 — Set up the project
+
+The Windows filesystem is accessible from WSL2 at `/mnt/c/...`. To avoid permission issues with the virtual environment, create it on the Linux filesystem:
+
+```bash
+cd /mnt/c/Users/<your-name>/AsgardBench
+
+# Create the venv on the Linux filesystem (not on /mnt/c/)
+UV_PROJECT_ENVIRONMENT=~/.venvs/asgardbench uv sync
+```
+
+### Step 4 — Run
+
+```bash
+UV_PROJECT_ENVIRONMENT=~/.venvs/asgardbench \
+  xvfb-run -a uv run python -m AsgardBench.Model.model_tester \
+  --test magt_benchmark_sanity \
+  --model <your-model>
+```
+
+---
+
+## Configuration
+
+### 1. Create the `.env` file
 
 ```bash
 cp .env.example .env
-# Edit .env with your API key and endpoint
 ```
 
-Required environment variables:
+Edit `.env` with your API credentials:
+
 ```bash
 OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://api.openai.com/v1  # Or your endpoint
+OPENAI_BASE_URL=https://api.openai.com/v1   # change for other providers
+OPENAI_CACHE_CONTROL=automatic              # use "explicit" for Anthropic/Google
 ```
 
-### Run the Sanity Check
+### 2. Provider Examples
 
-Verify your setup with a quick 2-task sanity check:
+| Provider | `OPENAI_BASE_URL` | Notes |
+|----------|--------------------|-------|
+| **OpenAI** | `https://api.openai.com/v1` | Default |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | Access 100+ models |
+| **Azure OpenAI** | `https://<resource>.openai.azure.com/` | Also set `OPENAI_API_VERSION` |
+| **vLLM (local)** | `http://localhost:8000/v1` | For self-hosted models |
+
+**OpenRouter example** (runs any model without a local GPU):
 
 ```bash
-# On Linux without a display, use xvfb-run
+OPENAI_API_KEY=sk-or-v1-...
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+```
+
+Then run with any model available on OpenRouter:
+
+```bash
+xvfb-run -a uv run python -m AsgardBench.Model.model_tester \
+    --test magt_benchmark_sanity \
+    --model qwen/qwen3.5-9b
+```
+
+---
+
+## Running the Benchmark
+
+### Sanity Check (2 tasks — ~5 minutes)
+
+Run this first to verify your setup is working:
+
+```bash
+# Linux / WSL2 (headless)
 xvfb-run -a uv run python -m AsgardBench.Model.model_tester \
     --test magt_benchmark_sanity \
     --model gpt-4o
 
-# On systems with a display (or macOS)
+# macOS (with display)
 uv run python -m AsgardBench.Model.model_tester \
     --test magt_benchmark_sanity \
     --model gpt-4o
 ```
 
-### Run the Full Benchmark
+### Full Benchmark (108 tasks)
 
 ```bash
 xvfb-run -a uv run python -m AsgardBench.Model.model_tester \
@@ -74,163 +192,145 @@ xvfb-run -a uv run python -m AsgardBench.Model.model_tester \
     --model gpt-4o
 ```
 
-See [Docker](#docker) for containerized execution. After running, see [Results](#results) to generate reports and view scores.
+The benchmark automatically **resumes** if interrupted — already-completed tasks are skipped.
 
+### All CLI Options
 
-## Benchmark Structure
-
-The benchmark consists of 108 task instances across 12 task types:
-
-| Dataset | Tasks |
-|---------|-------|
-| `magt_benchmark` | 108 |
-| `magt_benchmark_sanity` | 2 (quick setup verification) |
-
-For a full list of task types and their variations, see our paper.
-
-
-### Data Format
-
-Each task in `Generated/magt_benchmark*/` contains a `plan.json` with:
-
-```jsonc
-{
-  "name": "task_name",
-  "task_description": "Make coffee in the mug",  // task description given to the model
-  "scene": "FloorPlan1",                         // AI2-THOR scene identifier
-  "step_count": 25,                              // Expected number of steps to complete the task
-  "initial_pose": {                              // Agent's starting position and orientation
-    "position": {"x": 0.5, "y": 0.9, "z": -1.2},
-    "rotation": 90,
-    "horizon": 30,
-    "standing": true
-  },
-  "goal": {                                      // Success conditions for the task
-    "goal_type": "ObjectStateGoal",
-    "conditions": [...]
-  },
-  "setup_actions": [...],                        // Actions to initialize the scene
-  "object_setup": {...},                         // Object placements and states
-  "randomization": {...}                         // Randomization parameters used
-}
+```
+--test               Test set name (magt_benchmark | magt_benchmark_sanity)  [required]
+--model              Model identifier, e.g. "gpt-4o" or "qwen/qwen3.5-9b"   [required]
+--rep                Repetition number for multiple runs (default: 1)
+--temperature        Sampling temperature (default: 0.0)
+--max_completion_tokens  Max tokens in model response (default: 8192)
+--text_only          Send no images — text-only mode
+--feedback_type      Action feedback level: none | simple | detailed
+--previous_image     Include previous step's image: none | color | grayscale
+--use_memory         Enable agent memory (default: True)
 ```
 
-## Configuration
+Run `uv run python -m AsgardBench.Model.model_tester --help` for the full list.
 
-The default configuration runs the **baseline evaluation** used in our paper. Simply specify the test set and model:
-
-```bash
-uv run python -m AsgardBench.Model.model_tester --test <test_set> --model <model>
-```
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--test` | Test set name (`magt_benchmark` or `magt_benchmark_sanity`) | Required |
-| `--model` | Model identifier | Required |
-| `--temperature` | Sampling temperature | 0.0 |
-| `--max_completion_tokens` | Maximum tokens for model response | 8192 |
-| `--rep` | Repetition number (for multiple runs) | 1 |
-
-Run `--help` for the full list of parameters, including ablation flags. See our paper for details on the baseline configuration and ablation methodology.
-
-
-## Provider-Specific Configuration
-
-For Anthropic and Google APIs, set `OPENAI_CACHE_CONTROL=explicit` to enable prompt caching. Other providers (OpenAI, Azure, OpenRouter, vLLM, etc.) use automatic caching by default.
-
+---
 
 ## Results
 
-Results are saved to `Test/<test_set>/<model>--<config>--<rep>/`:
+### Output Directory Structure
 
-- `test_results.json` - Per-task success/failure data
-- `config.json` - Run configuration
-- `Plans/` - Detailed execution logs per task
+Results are written to `Test/` after each task completes:
 
-### Generating Reports
-
-To generate aggregated results across all test runs:
-
-```bash
-uv run python -m AsgardBench.Model.generate_reports
+```
+Test/
+└── magt_benchmark/
+    └── gpt-4o--T0_Fs_H60_...--rep1/
+        ├── test_results.json        ← per-task success/failure summary
+        ├── config.json              ← run configuration snapshot
+        └── Plans/
+            └── coffee__FloorPlan13/
+                ├── plan.json        ← full execution trace with model responses
+                ├── 0_FIND Mug.png   ← egocentric image at each step
+                ├── 1_PICKUP Mug.png
+                └── ...
 ```
 
-This produces `Test/results.xlsx` with success rates, failure breakdowns, and per-plan performance statistics.
+### Reading `test_results.json`
 
+```json
+{
+  "results": [
+    {
+      "name": "coffee__FloorPlan13_V1",
+      "success": true,
+      "fail_type": null,
+      "num_steps": 12
+    },
+    {
+      "name": "turn_on_tv__FloorPlan202_V1",
+      "success": false,
+      "fail_type": "max_steps",
+      "num_steps": 50
+    }
+  ]
+}
+```
 
-### Viewing Individual Task Executions
+### Generating an Aggregated Report
 
-To inspect step-by-step execution traces with images:
+After one or more runs, generate an Excel report with success rates and failure breakdowns:
+
+```bash
+uv run python -m AsgardBench.Model.generate_reports --tests magt_benchmark
+```
+
+Output: `Test/results.xlsx`
+
+### Browsing Step-by-Step Executions
+
+Launch a visual viewer to inspect each task's execution trace (images + model responses):
 
 ```bash
 uv run streamlit run AsgardBench/plan_viewer.py
 ```
 
-This launches a web UI for browsing task executions, viewing agent observations, and analyzing failures.
-
+---
 
 ## Docker
 
-A Dockerfile is provided for containerized execution.
+For fully containerized execution (handles xvfb automatically):
 
-
-### Building the Image
+### Build
 
 ```bash
 docker build -t asgardbench .
 ```
 
-### Running the Benchmark
+### Run
 
 ```bash
-# Run sanity check
+# Sanity check
 docker run --rm \
     -e OPENAI_API_KEY=sk-... \
-    -e OPENAI_BASE_URL=https://api.openai.com/v1 \
+    -e OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
     asgardbench \
-    --test magt_benchmark_sanity --model gpt-4o
+    --test magt_benchmark_sanity --model qwen/qwen3.5-9b
 
-# Run full benchmark with results saved to host
+# Full benchmark — save results to host
 docker run --rm \
-    -v $(pwd)/results:/app/Test \
+    -v $(pwd)/Test:/app/Test \
     -e OPENAI_API_KEY=sk-... \
-    -e OPENAI_BASE_URL=https://api.openai.com/v1 \
+    -e OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
     asgardbench \
-    --test magt_benchmark --model gpt-4o
+    --test magt_benchmark --model qwen/qwen3.5-9b
 ```
 
-### Networking Notes
+---
 
-When connecting to a local API server (e.g., vLLM running on the host on port `7000`), use `--network host`:
+## Benchmark Data Format
 
-```bash
-docker run --rm --network host \
-    -e OPENAI_API_KEY=dummy \
-    -e OPENAI_BASE_URL=http://host.docker.internal:7000/v1 \
-    asgardbench \
-    --test magt_benchmark_sanity --model your-model
+Each task in `Generated/magt_benchmark*/` has a `plan.json`:
+
+```jsonc
+{
+  "name": "coffee__FloorPlan13_V1",
+  "task_description": "Make coffee in the mug",
+  "scene": "FloorPlan13",           // AI2-THOR scene
+  "step_count": 25,                  // reference number of steps
+  "initial_pose": {                  // agent starting position
+    "position": {"x": 0.5, "y": 0.9, "z": -1.2},
+    "rotation": 90,
+    "horizon": 30
+  },
+  "goal": {                          // success conditions (checked automatically)
+    "goal_type": "ObjectStateGoal",
+    "conditions": [...]
+  },
+  "setup_actions": [...],            // scene initialization actions
+  "object_setup": {...}              // object placements and states
+}
 ```
 
-## Responsible AI
-
-For information about intended uses, limitations, and best practices, see [RESPONSIBLE_AI_FAQ.md](RESPONSIBLE_AI_FAQ.md).
-
-
-## Contributing
-
-This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact opencode@microsoft.com with any additional questions or comments.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
+---
 
 ## Citation
-
-If you use AsgardBench in your research, please cite:
 
 ```bibtex
 @misc{tupini2026asgardbench,
@@ -240,6 +340,6 @@ If you use AsgardBench in your research, please cite:
   eprint={2603.15888},
   archivePrefix={arXiv},
   primaryClass={cs.AI},
-  url={https://arxiv.org/abs/2603.15888}, 
+  url={https://arxiv.org/abs/2603.15888}
 }
 ```
